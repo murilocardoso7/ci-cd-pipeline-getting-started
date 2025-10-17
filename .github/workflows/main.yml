@@ -71,8 +71,4 @@ jobs:
     
     - name: Show default daemon json content
       run: |
-        if [ -f /etc/docker/daemon.json ]; then
-          sudo cat /etc/docker/daemon.json
-        else
-          echo "No /etc/docker/daemon.json found."
-        fi
+        if [ -f /etc/docker/daemon.json ]; then sudo cat /etc/docker/daemon.json else echo "/etc/docker/daemon.json não encontrado — pulando leitura." fi
