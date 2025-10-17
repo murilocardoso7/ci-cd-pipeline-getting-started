@@ -1,72 +1,43 @@
-name: CI
-
-on: [push]
-
-jobs:
-  sast_scan:
-    name: Run Bandit Scan
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
-
-    - name: Install Bandit
-      run: pip install bandit
-
-    - name: Run Bandit Scan
-      run: bandit -ll -ii -r . -f json -o bandit-report.json
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: bandit-findings
-        path: bandit-report.json
-
-  image_scan:
+image_scan:
     name: Build Image and Run Image Scan
     runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+  steps:
+  - name: Checkout code
+    uses: actions/checkout@v2
 
-    - name: Set up Docker
-      uses: docker-practice/actions-setup-docker@v1
-      with:
-        docker_version: 'latest'
+  - name: Install Docker manually
+    run: |
+      set -e
 
-    - name: Build Docker Image
-      run: docker build -f Dockerfile -t myapp:latest .
+      sudo mkdir -p /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
-    # - name: Docker Scout Scan
-      # run: |
-        # curl -fsSL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh -o install-scout.sh
-        # sh install-scout.sh
-        # echo ${{ secrets.REPO_PWD }} | docker login -u ${{ secrets.REPO_USER }} --password-stdin
-        # docker scout quickview
-        # docker scout cves
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-    - name: Docker Scout Scan
-      uses: docker/scout-action@v1.0.9
-      with:
-        dockerhub-user: ${{ secrets.REPO_USER }}
-        dockerhub-password: ${{ secrets.REPO_PWD }}
-        command: quickview,cves
-        only-severities: critical,high
-        sarif-file: scout-report.sarif
+      sudo apt-get update
+      sudo apt-get remove -y moby-engine moby-cli || echo "No moby to remove"
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: docker-scout-findings
-        path: scout-report.sarif
-    
- 
+      sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+      docker --version
+      sudo systemctl status docker --no-pager
+
+  - name: Build Docker Image
+    run: docker build -f Dockerfile -t myapp:latest .
+
+  - name: Docker Scout Scan
+    uses: docker/scout-action@v1.0.9
+    with:
+      dockerhub-user: ${{ secrets.REPO_USER }}
+      dockerhub-password: ${{ secrets.REPO_PWD }}
+      command: quickview,cves
+      only-severities: critical,high
+      sarif-file: scout-report.sarif
+
+  - name: Upload Artifact
+    uses: actions/upload-artifact@v4
+    if: always()
+    with:
+      name: docker-scout-findings
+      path: scout-report.sarif
